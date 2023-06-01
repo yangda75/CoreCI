@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test outputs</title>
+</head>
+<body>
+<ul>
+    {% for (run, report_path, update_time) in runs %}
+    <li><a><b>{{run}}</b></a>
+        <ul>
+            <li>update_time: {{update_time}}</li>
+            <li><a href="{{report_path}}">all in one report</a></li>
+            <li><a href="{{base_path}}/{{run}}">details</a></li>
+        </ul>
+    </li>
+    {% endfor %}
+</ul>
+</body>
+</html>

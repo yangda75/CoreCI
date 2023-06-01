@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Run '{{runid}}'</title>
+</head>
+<body>
+<h1>{{runid}}</h1>
+{% for folder in folders %}
+<h2>{{folder}}</h2>
+<ul>
+    <li><a href="{{base_path}}/{{folder}}/{{folder}}.html">report</a></li>
+    <li><a href="{{base_path}}/{{folder}}/pytest.log">log</a></li>
+</ul>
+{% endfor %}
+</body>
+</html>
