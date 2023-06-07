@@ -11,18 +11,15 @@ from test_job import TestJob
 from test_runner.test_runner_impl import TestRunner, create_sample_test_job
 from test_runner.utils import kill_core
 from pathlib import Path
+from test_runner.config import *
 
 app = FastAPI(title="CoreCI.TestRunner")
 
-BASE_DIR = Path(__file__).resolve().parent
-
-app.mount("/files", StaticFiles(directory=os.path.abspath("D:/test/runs")), name="TestOutput")
+app.mount("/files", StaticFiles(directory=os.path.abspath(RUN_DIR)), name="TestOutput")
 templates = Jinja2Templates(directory=str(Path(BASE_DIR, 'templates')))
 runner = TestRunner(10)
 threading.Thread(group=None, target=runner.run, daemon=True).start()
 kill_core()
-
-RUN_DIR = "D:/test/runs"
 
 @app.get("/")
 async def root():
@@ -32,17 +29,6 @@ async def root():
 @app.get("/info")
 async def info():
     return {"system": os.name, }  # TODO cpu, freq, mem, disk
-
-
-@app.get("/hello/{name}")
-async def say_hello(name: str):
-    return {"message": f"Hello {name}"}
-
-
-@app.post("/hi/{name}")
-async def say_hi(name: str):
-    return {"message": f"Hi {name}"}
-
 
 @app.get("/sample/test-job")
 async def sample_test_job():

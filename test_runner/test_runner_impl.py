@@ -59,6 +59,28 @@ class TestRunner:
             self._running = False
 
     def run_test_job(self, job: TestJob):
+        # fixme zip should be part of test job
+        # todo add field os to test job
+        build_name = file.filename.strip().strip(".zip")
+        logging.info(f"uploaded file: {file.filename}")
+        # install to builds dir
+        # todo let test runner install
+        logging.info(f"installing to dir: {ci_config.builds_dir}/{build_name}")
+        installed_folder = pathlib.WindowsPath(ci_config.builds_dir, build_name)
+        os.makedirs(installed_folder, exist_ok=True)
+        content = file.file.read()
+        file_like = io.BytesIO(content)
+        zip = zipfile.ZipFile(file_like)
+        zip.extractall(installed_folder)
+
+        # create test job
+        test_job = TestJob()
+        test_job.testcase_folder = ci_config.testcase_folder
+        test_job.report_path = ci_config.output_path
+        test_job.id = build_name + "-" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        test_job.start_time = str(datetime.datetime.now())
+        test_job.rdscore_folder = str(installed_folder)
+        runner_manager.submit_job(test_job)
         # stop running core
         kill_core()
         # start core in job folder
