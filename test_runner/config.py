@@ -9,3 +9,5 @@ print(BASE_DIR)
 RUN_DIR= BASE_DIR.joinpath("runs")
 makedirs(RUN_DIR, exist_ok=True)
 
+TESTCASE_DIR = BASE_DIR.joinpath("testcases")
+makedirs(TESTCASE_DIR, exist_ok=True)

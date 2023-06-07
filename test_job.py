@@ -8,7 +8,6 @@ class TestJob(BaseModel):
     # testcase_folder: str | None = "C:/projects/AutoTest"
     # report_path: str | None = "D:/test_runs"
     testcase_mark: str = 'm0'
-    rdscore_folder: str | None = ""
     rdscore_zip: bytes = bytes()
     build_name: str = "UNKNOWN"
     os: str = "Windows"

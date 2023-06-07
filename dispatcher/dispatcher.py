@@ -10,12 +10,13 @@ import logging
 import os
 import pathlib
 import threading
+from time import strftime
 import zipfile
+import uuid
 
 import aiofiles as aiofiles
 from fastapi import FastAPI, UploadFile
 
-from config import CiConfig
 from dispatcher.runner_manager import RunnerManager, RunnerHandle
 from test_job import TestJob
 
@@ -28,7 +29,6 @@ app = FastAPI(title="CoreCI.Dispatcher")
 runner_manager = RunnerManager()
 
 threading.Thread(group=None, target=runner_manager.run, daemon=True).start()
-ci_config = CiConfig()
 
 
 @app.get("/test/runner/")
@@ -56,3 +56,11 @@ async def upload_build(file: UploadFile):
     test_job = TestJob()
     test_job.rdscore_zip = file.file.read()
     test_job.os = "Windows"
+    filename = file.filename
+    if not filename:
+        test_job.build_name =  "UNKNOWN_BUILD@"+datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    else:
+        test_job.build_name = filename.strip().strip(".zip")
+    test_job.start_time = str(datetime.datetime.now())
+    test_job.id = str(uuid.uuid1())
+    runner_manager.submit_job(test_job)
