@@ -6,6 +6,7 @@ T1
 T2
 执行任务队列中的任务->报告
 """
+
 import os
 import pathlib
 import queue
@@ -15,8 +16,16 @@ import uuid
 
 from datetime import datetime
 
-from test_job import TestJob
-from test_runner.utils import kill_core, start_core
+from config import CI_CONFIG
+from test_job import CreateTestJobResponse, TestJob, CreateTestJobRequest, TestJobStatus
+from test_runner.storage import TestRunnerStorage
+from test_runner.utils import (
+    is_core_running,
+    kill_core,
+    start_core,
+    wait_until_core_started,
+    wait_until_core_stopped,
+)
 
 pytest_path = "C:/Users/yda/anaconda3/envs/py310/Scripts/pytest.exe"
 pytest_html_merger = "C:/Users/yda/anaconda3/envs/py310/Scripts/pytest_html_merger.exe"
@@ -36,9 +45,11 @@ class TestRunner:
     _stop_current_job = False
     _current_job: TestJob | None = None
     _running = False
+    storage: TestRunnerStorage
 
     def __init__(self, job_q_limit):
         self._test_job_q.maxsize = job_q_limit
+        self.storage = TestRunnerStorage(CI_CONFIG.builds_dir)
 
     def stop(self):
         self._stop_current_job = True
@@ -46,8 +57,14 @@ class TestRunner:
     def current_job(self):
         return self._current_job
 
+    def load_unfinished_jobs(self):
+        unfinished_jobs = self.storage.list_unfinished_jobs()
+        for job in unfinished_jobs:
+            self._test_job_q.put(job)
+
     def run(self):
         print("Started TestRunner")
+        self.load_unfinished_jobs()
         while True:
             if self._test_job_q.empty():
                 time.sleep(1)
@@ -59,70 +76,123 @@ class TestRunner:
             self._running = False
 
     def run_test_job(self, job: TestJob):
-        # fixme zip should be part of test job
-        # todo add field os to test job
-        build_name = file.filename.strip().strip(".zip")
-        logging.info(f"uploaded file: {file.filename}")
-        # install to builds dir
-        # todo let test runner install
-        logging.info(f"installing to dir: {ci_config.builds_dir}/{build_name}")
-        installed_folder = pathlib.WindowsPath(ci_config.builds_dir, build_name)
-        os.makedirs(installed_folder, exist_ok=True)
-        content = file.file.read()
-        file_like = io.BytesIO(content)
-        zip = zipfile.ZipFile(file_like)
-        zip.extractall(installed_folder)
-
-        # create test job
-        test_job = TestJob()
-        test_job.testcase_folder = ci_config.testcase_folder
-        test_job.report_path = ci_config.output_path
-        test_job.id = build_name + "-" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        test_job.start_time = str(datetime.datetime.now())
-        test_job.rdscore_folder = str(installed_folder)
-        runner_manager.submit_job(test_job)
-        # stop running core
-        kill_core()
-        # start core in job folder
-        start_core(job.rdscore_folder)
-        time.sleep(10) # todo verify core is started
-        # find folders
-        folders = []
         if job.testcase_folder is None:
-            raise Exception("Testcase folder cannot be None")
+            job.status = TestJobStatus.failed
+            job.error = "Testcase folder cannot be None"
+            self.storage.save_job(job)
+            return
+        if job.rdscore_version is None:
+            job.status = TestJobStatus.failed
+            job.error = "Rdscore version cannot be None"
+            self.storage.save_job(job)
+            return
+
+        if not self._stop_core_and_start(job):
+            job.status = TestJobStatus.failed
+            job.error = "Core did not start successfully"
+            self.storage.save_job(job)
+            return
+
+        job.status = TestJobStatus.running
+        self.storage.save_job(job)
+
         test_rdscore_path = pathlib.Path(job.testcase_folder).joinpath("test_rdscore")
-
         run_output_path = os.path.join(job.report_path, job.id)
+
         for entry in os.scandir(test_rdscore_path):
-            if self._stop_current_job:
-                self._stop_current_job = False
-                print(f"{job.id} stopped")
+            if not entry.name.startswith("test") or not entry.is_dir():
+                continue
+            if not self._process_entry(entry, job, run_output_path):
+                job.status = TestJobStatus.failed
+                job.error = "Failed to process entry"
+                self.storage.save_job(job)
                 break
-            if not entry.name.startswith("test"):
-                continue
-            if not entry.is_dir():
-                continue
-            print(f"path: {entry.path}, name: {entry.name}")
-            # run test in this folder
 
-            output_path = pathlib.Path(job.report_path, job.id, entry.name)
-            os.makedirs(output_path, exist_ok=True)
-            logfile = open(os.path.join(output_path, "pytest.log"), "w")
-            report_html_path = os.path.join(output_path, f"{entry.name}.html")
-            test_ret = subprocess.call(
-                [pytest_path, "-m", job.testcase_mark, f"--html={report_html_path}", "-x", "--timeout=120", entry.path],
-                stdout=logfile,
-                stderr=logfile)
-            print(f"{entry.name}, test result: {test_ret}, report: {report_html_path}")
-            # merge report after each folder
-            subprocess.call(
-                [pytest_html_merger, "-i", run_output_path, "-o", os.path.join(run_output_path, "merged.html")])
+        job.status = TestJobStatus.finished
+        self.storage.save_job(job)
 
-    def submit_job(self, job: TestJob):
-        if job.id is None:
-            job.id = str(uuid.uuid1())
+    def _stop_core_and_start(self, job: TestJob) -> bool:
+        if is_core_running():
+            kill_core()
+        if not wait_until_core_stopped(timeout_sec=30):
+            job.status = TestJobStatus.failed
+            job.error = "Core did not stop successfully within 30 seconds"
+            self.storage.save_job(job)
+            return False
+
+        rdscore_path = self.storage.get_version_abs_path(job.rdscore_version)
+        start_core(rdscore_path)
+        if not wait_until_core_started(timeout_sec=30):
+            job.status = TestJobStatus.failed
+            job.error = "Core did not start successfully within 30 seconds"
+            self.storage.save_job(job)
+            return False
+
+        return True
+
+    def _process_entry(self, entry, job: TestJob, run_output_path: str) -> bool:
+        if entry.name in job.finished_cases:
+            print(f"skip {entry.name} because it is already finished")
+            return True
+        if self._stop_current_job:
+            self._stop_current_job = False
+            print(f"{job.id} stopped")
+            job.status = TestJobStatus.failed
+            job.error = "Stopped by user"
+            self.storage.save_job(job)
+            return False
+
+        job.current_case = entry.name
+        if not is_core_running():
+            start_core(self.storage.get_version_abs_path(job.rdscore_version))
+        if not wait_until_core_started(timeout_sec=30):
+            job.status = TestJobStatus.failed
+            job.error = "Core did not start successfully within 30 seconds"
+            self.storage.save_job(job)
+            return False
+
+        output_path = pathlib.Path(job.report_path, job.id, entry.name)
+        os.makedirs(output_path, exist_ok=True)
+        logfile = open(os.path.join(output_path, "pytest.log"), "w")
+        report_html_path = os.path.join(output_path, f"{entry.name}.html")
+        test_ret = subprocess.call(
+            [
+                pytest_path,
+                "-m",
+                job.testcase_mark,
+                f"--html={report_html_path}",
+                "-x",
+                "--timeout=120",
+                entry.path,
+            ],
+            stdout=logfile,
+            stderr=logfile,
+        )
+        print(f"{entry.name}, test result: {test_ret}, report: {report_html_path}")
+        job.current_case = None
+        job.finished_cases.append(entry.name)
+        self.storage.save_job(job)
+        subprocess.call(
+            [
+                pytest_html_merger,
+                "-i",
+                run_output_path,
+                "-o",
+                os.path.join(run_output_path, "merged.html"),
+            ]
+        )
+        return True
+
+    def submit_job(self, job_input: CreateTestJobRequest):
+        job = TestJob(**job_input.dict())
+        job.status = TestJobStatus.pending
+        job.testcase_folder = CI_CONFIG.testcase_folder
+        job.report_path = CI_CONFIG.output_path
+        job.id = str(uuid.uuid1())
+        job.start_time = datetime.now().isoformat()
         self._test_job_q.put(job)
-        return job
+        self.storage.save_job(job)
+        return CreateTestJobResponse(job_id=job.id, start_time=job.start_time)
 
     def running(self):
         return self._running
