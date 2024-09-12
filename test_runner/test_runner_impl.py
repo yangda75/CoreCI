@@ -27,16 +27,12 @@ from test_runner.utils import (
     wait_until_core_stopped,
 )
 
-pytest_path = "C:/Users/yda/anaconda3/envs/py310/Scripts/pytest.exe"
-pytest_html_merger = "C:/Users/yda/anaconda3/envs/py310/Scripts/pytest_html_merger.exe"
-
-
 def create_sample_test_job() -> TestJob:
     j = TestJob()
-    j.id = uuid.uuid1()
-    j.start_time = datetime.now()
-    j.testcase_folder = pathlib.Path("C:/projects/AutoTest")
-    j.report_path = pathlib.Path("D:/test_runs")
+    j.id = str(uuid.uuid1())
+    j.start_time = datetime.now().isoformat()
+    j.testcase_folder = CI_CONFIG.testcase_folder
+    j.report_path = CI_CONFIG.output_path
     return j
 
 
@@ -157,7 +153,7 @@ class TestRunner:
         report_html_path = os.path.join(output_path, f"{entry.name}.html")
         test_ret = subprocess.call(
             [
-                pytest_path,
+                CI_CONFIG.pytest_path,
                 "-m",
                 job.testcase_mark,
                 f"--html={report_html_path}",
@@ -174,7 +170,7 @@ class TestRunner:
         self.storage.save_job(job)
         subprocess.call(
             [
-                pytest_html_merger,
+                CI_CONFIG.pytest_html_merger,
                 "-i",
                 run_output_path,
                 "-o",

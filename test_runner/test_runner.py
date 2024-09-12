@@ -11,7 +11,7 @@ from config import CI_CONFIG
 from test_job import CreateTestJobRequest
 from test_runner.test_runner_impl import TestRunner, create_sample_test_job
 from pathlib import Path
-from test_runner.config import *
+
 
 app = FastAPI(title="CoreCI.TestRunner")
 
