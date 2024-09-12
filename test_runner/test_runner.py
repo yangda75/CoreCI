@@ -1,6 +1,9 @@
+from contextlib import asynccontextmanager
 import datetime
+from operator import lshift
 import os
 import threading
+from typing import Optional
 
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
@@ -12,22 +15,37 @@ from test_job import CreateTestJobRequest
 from test_runner.test_runner_impl import TestRunner, create_sample_test_job
 from pathlib import Path
 
+templates = {}
+runner: Optional[TestRunner] = None
 
-app = FastAPI(title="CoreCI.TestRunner")
 
-BASE_DIR = Path(__file__).resolve().parent
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # setup
+    if not os.path.exists(CI_CONFIG.output_path):
+        os.makedirs(CI_CONFIG.output_path)
+    if not os.path.exists(CI_CONFIG.jobs_dir):
+        os.makedirs(CI_CONFIG.jobs_dir)
+    global templates
+    templates = Jinja2Templates(
+        directory=str(Path(Path(__file__).resolve().parent, "templates"))
+    )
+    app.mount(
+        "/files",
+        StaticFiles(directory=os.path.abspath(CI_CONFIG.output_path)),
+        name="TestOutput",
+    )
+    global runner
+    runner = TestRunner(10)
+    threading.Thread(group=None, target=runner.run, daemon=True).start()
 
-if not os.path.exists(CI_CONFIG.output_path):
-    os.makedirs(CI_CONFIG.output_path)
+    yield
 
-app.mount(
-    "/files",
-    StaticFiles(directory=os.path.abspath(CI_CONFIG.output_path)),
-    name="TestOutput",
-)
-templates = Jinja2Templates(directory=str(Path(BASE_DIR, "templates")))
-runner = TestRunner(10)
-threading.Thread(group=None, target=runner.run, daemon=True).start()
+    # teardown
+    runner.stop()
+
+
+app = FastAPI(title="CoreCI.TestRunner", lifespan=lifespan)
 
 
 @app.get("/ping")

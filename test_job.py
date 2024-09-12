@@ -20,7 +20,7 @@ class TestJob(BaseModel):
     id: str | None = None
     start_time: str | None = str(datetime.now())
     testcase_folder: str | None 
-    testcase_mark: str = 'm0'
+    testcase_mark: str = 'm0 and not imperfect'
     rdscore_version: str | None = ""
     current_case: str | None = None
     finished_cases: list[str] = []
