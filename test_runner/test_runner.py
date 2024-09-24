@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 import datetime
-from operator import lshift
 import os
 import threading
 from typing import Optional
@@ -10,8 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 
-from config import CI_CONFIG
-from test_job import CreateTestJobRequest
+from test_runner.config import CI_CONFIG
+from test_runner.test_job import CreateTestJobRequest
 from test_runner.test_runner_impl import TestRunner, create_sample_test_job
 from pathlib import Path
 
@@ -70,16 +69,11 @@ async def list_versions():
 
 @app.post("/test/job/accept")
 async def accept_test_job(job: CreateTestJobRequest):
-    version_exists = runner.storage.has_version(job.rdscore_version)
-    if not version_exists:
-        return {"status": "error", "message": "Version does not exist"}
-    return {"status": "success"}
+    return runner.accept_test_job(job)
 
 
 @app.get("/runs", response_class=HTMLResponse)
 async def list_runs(request: Request):
-    runs = os.scandir(CI_CONFIG.output_path)
-    [print(f.name) for f in runs]
     # [runid, report, updatetime]
     run_info_list = []
     for run in os.scandir(CI_CONFIG.output_path):

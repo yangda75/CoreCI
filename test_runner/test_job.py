@@ -6,9 +6,6 @@ class CreateTestJobRequest(BaseModel):
     testcase_mark: str = 'm0'
     rdscore_version: str | None = ""
     
-class CreateTestJobResponse(BaseModel):
-    job_id: str
-    start_time: str
 
 class TestJobStatus(str, Enum):
     pending = "pending"
@@ -28,3 +25,7 @@ class TestJob(BaseModel):
     error: str | None = None
     log_path: str | None = None
     report_path: str | None = None
+
+class CreateTestJobResponse(BaseModel):
+    created: bool = False
+    job: TestJob | None = None

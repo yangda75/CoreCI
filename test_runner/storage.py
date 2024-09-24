@@ -1,7 +1,7 @@
 import os
 import json
-from config import CI_CONFIG
-from test_job import TestJob, TestJobStatus
+from test_runner.config import CI_CONFIG
+from test_runner.test_job import TestJob, TestJobStatus
 
 
 class TestRunnerStorage:

@@ -16,8 +16,8 @@ import uuid
 
 from datetime import datetime
 
-from config import CI_CONFIG
-from test_job import CreateTestJobResponse, TestJob, CreateTestJobRequest, TestJobStatus
+from test_runner.config import CI_CONFIG
+from test_runner.test_job import CreateTestJobResponse, TestJob, CreateTestJobRequest, TestJobStatus
 from test_runner.storage import TestRunnerStorage
 from test_runner.utils import (
     is_core_running,
@@ -70,6 +70,11 @@ class TestRunner:
             self._current_job = job
             self.run_test_job(job)
             self._running = False
+
+    def accept_test_job(self, job: CreateTestJobRequest):
+        if job.rdscore_version not in self.storage.list_rdscore_versions():
+            return False
+        return True
 
     def run_test_job(self, job: TestJob):
         if job.testcase_folder is None:
@@ -178,8 +183,10 @@ class TestRunner:
             ]
         )
         return True
-
+  
     def submit_job(self, job_input: CreateTestJobRequest):
+        if not self.accept_test_job(job_input):
+            return CreateTestJobResponse(created=False)
         job = TestJob(**job_input.dict())
         job.status = TestJobStatus.pending
         job.testcase_folder = CI_CONFIG.testcase_folder
@@ -188,7 +195,7 @@ class TestRunner:
         job.start_time = datetime.now().isoformat()
         self._test_job_q.put(job)
         self.storage.save_job(job)
-        return CreateTestJobResponse(job_id=job.id, start_time=job.start_time)
+        return CreateTestJobResponse(created=True, job=job)
 
     def running(self):
         return self._running

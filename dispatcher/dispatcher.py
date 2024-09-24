@@ -4,63 +4,61 @@
 1. 使用probe测试runner是否可用
 2. 接收测试任务，分配给空闲的runner
 """
+
+from contextlib import asynccontextmanager
 import datetime
-import io
 import logging
-import os
-import pathlib
 import threading
-from time import strftime
-import zipfile
+from typing import Optional
 import uuid
 
 import aiofiles as aiofiles
 from fastapi import FastAPI, UploadFile
 
 from dispatcher.runner_manager import RunnerManager, RunnerHandle
-from test_job import TestJob
+from dispatcher.storage import DispatcherStorage
+from dispatcher.types import CreateTestJobRequest
 
 logging.getLogger("uvicorn.access")
-FORMAT = '%(asctime)s %(message)s'
-logging.basicConfig(format=FORMAT,level=logging.INFO)
-
-app = FastAPI(title="CoreCI.Dispatcher")
-
-runner_manager = RunnerManager()
-
-threading.Thread(group=None, target=runner_manager.run, daemon=True).start()
+FORMAT = "%(asctime)s %(message)s"
+logging.basicConfig(format=FORMAT, level=logging.INFO)
 
 
-@app.get("/test/runner/")
+runner_manager: Optional[RunnerManager] = None
+storage: Optional[DispatcherStorage] = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global runner_manager
+    global storage
+    runner_manager = RunnerManager()
+    storage = DispatcherStorage()
+    threading.Thread(group=None, target=runner_manager.run, daemon=True).start()
+    yield
+    runner_manager.shutdown()
+
+app = FastAPI(title="CoreCI.TestRunner", lifespan=lifespan)
+
+
+@app.get("/runner/")
 async def get_all_runners():
     return runner_manager.get_all_runners()
 
 
-@app.post("/test/job/")
-async def submit_test_job(job: TestJob):
+@app.post("/job/")
+async def submit_test_job(job: CreateTestJobRequest):
     runner_manager.submit_job(job)
 
 
-@app.post("/test/runner/")
+@app.post("/runner/register/")
 async def add_runner(runner_handle: RunnerHandle):
     runner_manager.register(runner_handle)
 
 
-@app.post("/build/windows/upload/")
-async def upload_build(file: UploadFile):
-    """
-    Create test job for uploaded file
-    :param file: rdscore build to be tested
-    :return: None
-    """
-    test_job = TestJob()
-    test_job.rdscore_zip = file.file.read()
-    test_job.os = "Windows"
-    filename = file.filename
-    if not filename:
-        test_job.build_name =  "UNKNOWN_BUILD@"+datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    else:
-        test_job.build_name = filename.strip().strip(".zip")
-    test_job.start_time = str(datetime.datetime.now())
-    test_job.id = str(uuid.uuid1())
-    runner_manager.submit_job(test_job)
+@app.post("/versions/upload/{expected_md5}")
+async def upload_build(file: UploadFile, expected_md5: str):
+    storage.add_rdscore_zip(file.file.read(), file.filename, expected_md5)
+
+@app.get("/versions/list/")
+async def list_versions():
+    return storage.list_versions()
