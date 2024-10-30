@@ -111,7 +111,8 @@ class TestRunner:
 
         job.status = TestJobStatus.finished
         self.storage.save_job(job)
-
+    def get_info(self):
+        return {"os": CI_CONFIG.os, "current_job": self._current_job}
     def _stop_core_and_start(self, job: TestJob) -> bool:
         if is_core_running():
             kill_core()

@@ -23,7 +23,6 @@ logging.getLogger("uvicorn.access")
 FORMAT = "%(asctime)s %(message)s"
 logging.basicConfig(format=FORMAT, level=logging.INFO)
 
-
 runner_manager: Optional[RunnerManager] = None
 storage: Optional[DispatcherStorage] = None
 
@@ -39,18 +38,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="CoreCI.TestRunner", lifespan=lifespan)
 
-
-@app.get("/runner/")
+@app.get("/runners/list/")
 async def get_all_runners():
     return runner_manager.get_all_runners()
 
 
-@app.post("/job/")
+@app.post("/jobs/submit/")
 async def submit_test_job(job: CreateTestJobRequest):
     runner_manager.submit_job(job)
 
 
-@app.post("/runner/register/")
+@app.post("/runners/register/")
 async def add_runner(runner_handle: RunnerHandle):
     runner_manager.register(runner_handle)
 

@@ -51,6 +51,9 @@ app = FastAPI(title="CoreCI.TestRunner", lifespan=lifespan)
 async def root():
     return {"message": "pong"}
 
+@app.get("/info")
+async def info():
+    return runner.get_info()
 
 @app.get("/sample/test-job")
 async def sample_test_job():

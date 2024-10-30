@@ -30,7 +30,8 @@ def is_file_rdscore_zip(path: Path) -> bool:
     if len(version_segments) != 4:
         return False
     # version segments should start with 0 1 9 or 0 2 0
-    if version_segments[0:2] not in [["0", "1", "9"], ["0", "2", "0"]]:
+    if version_segments[:3] not in [["0", "1", "9"], ["0", "2", "0"]]:
+        logging.info(f"version_segments[0:2] not in [[\"0\", \"1\", \"9\"], [\"0\", \"2\", \"0\"]]: {version_segments[0:2]}")
         return False
     # TODO unzip and check
     return True
@@ -39,17 +40,23 @@ def parse_rdscore_version_from_filename(filename: str) -> RDSCoreVersion | None:
     segments = filename.split("-")
     if len(segments) != 3:
         return None
-    version_prefix = segments[0]
+    os = segments[0]
     version = segments[1]
-    os = segments[2]
+    version_segments = version.split(".")
+    if len(version_segments) != 4:
+        return None
+    version_prefix = version_segments[0] + "." + version_segments[1] + "." + version_segments[2]
     return RDSCoreVersion(version_prefix=version_prefix, version=version, os=os, md5="")
 
 def parse_rdscore_version(path: Path) -> RDSCoreVersion | None:
+    logging.info(f"parse_rdscore_version: {path}")
     if not is_file_rdscore_zip(path):
+        logging.info("not a rdscore zip file")
         return None 
     # calculate md5 of the file
     md5 = hashlib.md5(path.read_bytes()).hexdigest()
     version = parse_rdscore_version_from_filename(path.name)
+    logging.info(f"parse_rdscore_version: {version}")
     if version is None:
         return None
     version.md5 = md5
@@ -68,7 +75,6 @@ class DispatcherStorage:
         self.rdscore_versions = [
             parse_rdscore_version(path)
             for path in Path(CONFIG.rdscore_versions_path).iterdir()
-            if is_file_rdscore_zip(path)
         ]
 
     def add_rdscore_version(self, version: str):
@@ -104,4 +110,5 @@ class DispatcherStorage:
         ]
 
     def list_versions(self) -> List[RDSCoreVersion]:
+        logging.info(f"list_versions: {self.rdscore_versions}")
         return self.rdscore_versions

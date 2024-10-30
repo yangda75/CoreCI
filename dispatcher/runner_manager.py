@@ -27,6 +27,8 @@ class RunnerManager:
         self.jobs_to_dispatch: list[CreateTestJobRequest] = []
 
     def get_all_runners(self):
+        if self.runners == []:
+            return [RunnerHandle()]
         return self.runners
 
     def submit_job(self, job: CreateTestJobRequest):
@@ -59,3 +61,9 @@ class RunnerManager:
                 send_job(job, runner)
                 return True
         return False
+    def refresh_runner_status(self):
+        """
+        和runner通信，更新runner状态
+        TODO: 心跳机制
+        """
+        pass
