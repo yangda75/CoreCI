@@ -42,6 +42,9 @@ app = FastAPI(title="CoreCI.TestRunner", lifespan=lifespan)
 async def get_all_runners():
     return runner_manager.get_all_runners()
 
+@app.post("/runners/add/")
+async def add_runner(runner: RunnerHandle):
+    runner_manager.add_runner(runner)
 
 @app.post("/jobs/submit/")
 async def submit_test_job(job: CreateTestJobRequest):
