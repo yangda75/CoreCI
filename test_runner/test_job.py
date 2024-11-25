@@ -29,3 +29,7 @@ class TestJob(BaseModel):
 class CreateTestJobResponse(BaseModel):
     created: bool = False
     job: TestJob | None = None
+
+class AcceptTestJobResponse(BaseModel):
+    accepted: bool = False
+    error: str | None = None

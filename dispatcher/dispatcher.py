@@ -30,8 +30,9 @@ storage: Optional[DispatcherStorage] = None
 async def lifespan(app: FastAPI):
     global runner_manager
     global storage
-    runner_manager = RunnerManager()
     storage = DispatcherStorage()
+    
+    runner_manager = RunnerManager(storage)
     threading.Thread(group=None, target=runner_manager.run, daemon=True).start()
     yield
     runner_manager.shutdown()

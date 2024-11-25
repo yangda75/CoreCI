@@ -11,12 +11,13 @@ import os
 from dispatcher.config import CONFIG
 from dispatcher.types import CreateTestJobRequest, RunnerHandle
 
-
+def send_version(zip_file: bytes, expected_md5: str, runner: RunnerHandle):
+    res = requests.post(f"http://{runner.ip}:{runner.port}/test/storage/versions/upload/{expected_md5}", files={"file": zip_file})
+    logging.info(f"try to send version {runner.id} {res.text}")
 
 def accept_job(job: CreateTestJobRequest, runner: RunnerHandle):
     res = requests.post(f"http://{runner.ip}:{runner.port}/test/job/accept", json=job.dict())
-    logging.info(res)
-    logging.info(res.text)
+    logging.info(f"try to accept job {runner.id} {res.text}")
     return res.text == "true"
 
 
@@ -27,11 +28,12 @@ def send_job(job: CreateTestJobRequest, runner: RunnerHandle):
     return res.json()
 
 class RunnerManager:
-    def __init__(self):
+    def __init__(self, storage):
         self.runners: list[RunnerHandle] = []
         self.jobs_to_dispatch: list[CreateTestJobRequest] = []
+        self.jobs_running: list[CreateTestJobRequest] = []
         self._load_runner_infos()
-
+        self.storage = storage
 
     def get_all_runners(self):
         if self.runners == []:
@@ -61,7 +63,7 @@ class RunnerManager:
         cursor = conn.cursor()
         cursor.execute("select * from runner_infos")
         for row in cursor.fetchall():
-            runner_id, ip, port, runner_idos, status = row
+            runner_id, ip, port, runner_os, status = row
             self.runners.append(RunnerHandle(id=runner_id, ip=ip, port=port, os=runner_os, status=status))
         conn.close()
 
@@ -84,14 +86,28 @@ class RunnerManager:
             return False
         for job in self.jobs_to_dispatch[:]:
             if self.match_and_dispatch_job(job):
+                # remove job from jobs_to_dispatch
+                self.jobs_to_dispatch.remove(job)
+                self.jobs_running.append(job)
                 return True
         return False
 
     def match_and_dispatch_job(self, job: CreateTestJobRequest):
         for runner in self.runners[:]:
+            # match job and runner
+            if runner.os != job.os:
+                continue
+            if runner.status != "idle":
+                continue
+            # send version to runner
+            zip_file_and_md5 = self.storage.fetch_file_and_md5_of_version(job.rdscore_version, job.os)
+            if zip_file_and_md5 is None:
+                self.jobs_to_dispatch.remove(job)
+                continue
+            zip_file, md5 = zip_file_and_md5
+            send_version(zip_file, md5, runner)
             if accept_job(job, runner):
                 self.jobs_to_dispatch.remove(job)
-                self.runners.remove(runner)
                 send_job(job, runner)
                 return True
         return False

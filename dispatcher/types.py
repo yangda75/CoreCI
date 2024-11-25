@@ -7,6 +7,7 @@ class CreateTestJobRequest(BaseModel):
     rdscore_version: str
     os: str
     testcase_mark: str
+    id: str | None = None
 
 
 class CreateTestJobResponse(BaseModel):
@@ -15,11 +16,13 @@ class CreateTestJobResponse(BaseModel):
     runner_id: str | None = None
     error: str | None = None
 
+
 class RDSCoreVersion(BaseModel):
-    version_prefix: str # 0.1.9
-    version: str # 0.1.9.240909
-    os: str # windows or linux
+    version_prefix: str  # 0.1.9
+    version: str  # 0.1.9.240909
+    os: str  # windows or linux
     md5: str
+    full: str  # windows-0.1.9.240909-0.1.9.zip
 
 
 class TestRecord(BaseModel):
@@ -38,6 +41,7 @@ class TestRecord(BaseModel):
 class RdscoreVersionTestRecord(BaseModel):
     version: str
     test_records: List[TestRecord]
+
 
 class RunnerHandle(BaseModel):
     id: str | None = "DefaultRunnerId"

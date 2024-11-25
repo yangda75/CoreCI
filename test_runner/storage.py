@@ -1,5 +1,8 @@
+from importlib.metadata import files
 import os
 import json
+from pathlib import Path
+import zipfile
 from test_runner.config import CI_CONFIG
 from test_runner.test_job import TestJob, TestJobStatus
 
@@ -16,7 +19,22 @@ class TestRunnerStorage:
 
     def list_rdscore_versions(self):
         return os.listdir(self.base_dir)
-
+    
+    def add_rdscore_version(self, zip_file:bytes, filename:str, expected_md5:str):
+        version = filename
+        if version is None:
+            return
+        # if version is present, return
+        if self.has_version(version):
+            return
+        path = Path(self.base_dir) / filename
+        path.write_bytes(zip_file)
+        print(f"save rdscore zip to {path}")
+        # unzip
+        with zipfile.ZipFile(path, 'r') as zip_ref:
+            zip_ref.extractall(self.base_dir)
+        print(f"unzip rdscore zip to {path}")
+        
     def save_job(self, job: TestJob):
         job_path = os.path.join(CI_CONFIG.jobs_dir, job.id)
         # make sure job folder exists
@@ -32,7 +50,7 @@ class TestRunnerStorage:
 
     def remove_job(self, job_id: str):
         job_path = os.path.join(CI_CONFIG.jobs_dir, job_id)
-        if os.path.exists(job_path):
+        if os.path.isfile(job_path):
             # try remove file
             try:
                 os.remove(job_path)
@@ -43,6 +61,7 @@ class TestRunnerStorage:
         unfinished_jobs = []
         if not os.path.exists(CI_CONFIG.jobs_dir):
             return []
+        files_to_remove = []
         for file in os.listdir(CI_CONFIG.jobs_dir):
             # try load file as json
             try:
@@ -50,13 +69,13 @@ class TestRunnerStorage:
                     job_data = json.load(f)
                     status_str = job_data["status"]
                     if status_str in ["finished", "failed"]:
-                        self.remove_job(job_data["id"])
+                        files_to_remove.append(job_data["id"])
                         continue
 
                     # Check if status is valid before creating TestJob
                     if status_str not in [status.name for status in TestJobStatus]:
                         print(f"Invalid status: {status_str}")
-                        self.remove_job(job_data["id"])
+                        files_to_remove.append(job_data["id"])
                         continue  # Skip invalid statuses
 
                     job = TestJob(
@@ -75,4 +94,6 @@ class TestRunnerStorage:
                     unfinished_jobs.append(job)
             except json.JSONDecodeError:
                 continue
+        for job_id in files_to_remove:
+            self.remove_job(job_id)
         return unfinished_jobs

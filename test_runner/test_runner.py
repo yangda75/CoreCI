@@ -4,7 +4,7 @@ import os
 import threading
 from typing import Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
@@ -64,11 +64,13 @@ async def sample_test_job():
 async def submit_test_job(job: CreateTestJobRequest):
     return runner.submit_job(job)
 
-
 @app.get("/test/storage/versions")
 async def list_versions():
     return runner.storage.list_rdscore_versions()
 
+@app.post("/test/storage/versions/upload/{expected_md5}")
+async def upload_version(file: UploadFile, expected_md5: str):
+    return runner.storage.add_rdscore_version(file.file.read(), file.filename, expected_md5)
 
 @app.post("/test/job/accept")
 async def accept_test_job(job: CreateTestJobRequest):

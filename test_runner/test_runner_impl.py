@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 
 from test_runner.config import CI_CONFIG
-from test_runner.test_job import CreateTestJobResponse, TestJob, CreateTestJobRequest, TestJobStatus
+from test_runner.test_job import AcceptTestJobResponse, CreateTestJobResponse, TestJob, CreateTestJobRequest, TestJobStatus
 from test_runner.storage import TestRunnerStorage
 from test_runner.utils import (
     is_core_running,
@@ -36,17 +36,23 @@ def create_sample_test_job() -> TestJob:
     return j
 
 
+def identify_os():
+    return os.name
+
 class TestRunner:
     _test_job_q = queue.Queue()
     _stop_current_job = False
     _current_job: TestJob | None = None
     _running = False
     storage: TestRunnerStorage
+    _os: str
 
     def __init__(self, job_q_limit):
         self._test_job_q.maxsize = job_q_limit
         self.storage = TestRunnerStorage(CI_CONFIG.builds_dir)
-
+        self._os = identify_os()
+        print("os: "+self._os)
+        
     def stop(self):
         self._stop_current_job = True
 
@@ -71,10 +77,10 @@ class TestRunner:
             self.run_test_job(job)
             self._running = False
 
-    def accept_test_job(self, job: CreateTestJobRequest):
+    def accept_test_job(self, job: CreateTestJobRequest)->AcceptTestJobResponse:
         if job.rdscore_version not in self.storage.list_rdscore_versions():
-            return False
-        return True
+            return AcceptTestJobResponse(accepted=False, error=f"rdscore version not found: {job.rdscore_version}")
+        return AcceptTestJobResponse(accepted=True)
 
     def run_test_job(self, job: TestJob):
         if job.testcase_folder is None:
@@ -111,8 +117,10 @@ class TestRunner:
 
         job.status = TestJobStatus.finished
         self.storage.save_job(job)
+
     def get_info(self):
         return {"os": CI_CONFIG.os, "current_job": self._current_job}
+
     def _stop_core_and_start(self, job: TestJob) -> bool:
         if is_core_running():
             kill_core()
@@ -129,7 +137,6 @@ class TestRunner:
             job.error = "Core did not start successfully within 30 seconds"
             self.storage.save_job(job)
             return False
-
         return True
 
     def _process_entry(self, entry, job: TestJob, run_output_path: str) -> bool:
