@@ -2,6 +2,7 @@
 
 ## 里程碑
 - [X] 执行AutoTest中(不需要仿真rbk的) && (rdscore) && (m0标记的)测试用例并生成报告
+- [X] 通过网页开始一个测试任务
 - [ ] 可以安装的TestRunner
 - [ ] 接入coding.net
 - [ ] 容器化TestRunner

@@ -50,7 +50,7 @@ class TestRunner:
     def __init__(self, job_q_limit):
         self._test_job_q.maxsize = job_q_limit
         self.storage = TestRunnerStorage(CI_CONFIG.builds_dir)
-        self._os = identify_os()
+        self._os = "windows" if identify_os() == "nt" else "linux"
         print("os: "+self._os)
         
     def stop(self):

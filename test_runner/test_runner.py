@@ -60,7 +60,7 @@ async def sample_test_job():
     return create_sample_test_job()
 
 
-@app.post("/test/job/")
+@app.post("/test/job")
 async def submit_test_job(job: CreateTestJobRequest):
     return runner.submit_job(job)
 

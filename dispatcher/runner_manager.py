@@ -18,7 +18,7 @@ def send_version(zip_file: bytes, expected_md5: str, runner: RunnerHandle):
 def accept_job(job: CreateTestJobRequest, runner: RunnerHandle):
     res = requests.post(f"http://{runner.ip}:{runner.port}/test/job/accept", json=job.dict())
     logging.info(f"try to accept job {runner.id} {res.text}")
-    return res.text == "true"
+    return res.json()["accepted"] == True
 
 
 def send_job(job: CreateTestJobRequest, runner: RunnerHandle):
@@ -87,8 +87,6 @@ class RunnerManager:
         for job in self.jobs_to_dispatch[:]:
             if self.match_and_dispatch_job(job):
                 # remove job from jobs_to_dispatch
-                self.jobs_to_dispatch.remove(job)
-                self.jobs_running.append(job)
                 return True
         return False
 
@@ -109,7 +107,10 @@ class RunnerManager:
             if accept_job(job, runner):
                 self.jobs_to_dispatch.remove(job)
                 send_job(job, runner)
+                self.jobs_running.append(job)
                 return True
+            else:
+                self.jobs_to_dispatch.remove(job)
         return False
     
     def refresh_runner_status(self):
