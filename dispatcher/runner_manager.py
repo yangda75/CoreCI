@@ -12,17 +12,18 @@ from dispatcher.config import CONFIG
 from dispatcher.types import CreateTestJobRequest, RunnerHandle
 
 def send_version(zip_file: bytes, expected_md5: str, runner: RunnerHandle):
-    res = requests.post(f"http://{runner.ip}:{runner.port}/test/storage/versions/upload/{expected_md5}", files={"file": zip_file})
+    res = requests.post(f"{runner.baseurl}/test/storage/versions/upload/{expected_md5}", files={"file": zip_file})
     logging.info(f"try to send version {runner.id} {res.text}")
 
+
 def accept_job(job: CreateTestJobRequest, runner: RunnerHandle):
-    res = requests.post(f"http://{runner.ip}:{runner.port}/test/job/accept", json=job.dict())
+    res = requests.post(f"{runner.baseurl}/test/job/accept", json=job.dict())
     logging.info(f"try to accept job {runner.id} {res.text}")
     return res.json()["accepted"] == True
 
 
 def send_job(job: CreateTestJobRequest, runner: RunnerHandle):
-    res = requests.post(f"http://{runner.ip}:{runner.port}/test/job", json=job.dict())
+    res = requests.post(f"{runner.baseurl}/test/job", json=job.dict())
     logging.info(res)
     logging.info(res.text)
     return res.json()

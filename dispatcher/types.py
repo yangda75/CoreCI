@@ -45,7 +45,6 @@ class RdscoreVersionTestRecord(BaseModel):
 
 class RunnerHandle(BaseModel):
     id: str | None = "DefaultRunnerId"
-    ip: str | None = "127.0.0.1"
-    port: int | None = 10898
     os: str | None = "windows"
     status: str | None = "idle"
+    baseurl: str | None = "http://127.0.0.1:10898"
