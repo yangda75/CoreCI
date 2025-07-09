@@ -2,12 +2,12 @@ from typing import List
 
 from pydantic import BaseModel
 
-
 class CreateTestJobRequest(BaseModel):
-    rdscore_version: str
-    os: str
-    testcase_mark: str
+    testcase_mark: str = 'm0'
+    rdscore_file_url: str = ""
+    rdscore_version: str = ""
     id: str | None = None
+    os: str | None = None  # windows or linux
 
 
 class CreateTestJobResponse(BaseModel):

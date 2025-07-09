@@ -47,7 +47,6 @@ async def lifespan(app: FastAPI):
               StaticFiles(directory=str(Path(__file__).resolve().parent / "dist")),
               name="dist")
     yield
-    runner_manager.shutdown()
 
 app = FastAPI(title="CoreCI.TestRunner", lifespan=lifespan)
 # read manifest.json
@@ -89,3 +88,17 @@ async def upload_build(file: UploadFile, expected_md5: str):
 @app.get("/api/versions/list/")
 async def list_versions():
     return storage.list_versions()
+
+@app.get("/api/versions/download/{version_name}")
+async def download_version(version_name: str):
+    version_path = Path(storage.rdscore_versions_path) / version_name
+    if not version_path.exists():
+        return {"error": "version not found"}
+    async with aiofiles.open(version_path, mode='rb') as f:
+        content = await f.read()
+    return HTMLResponse(content=content, media_type="application/zip", headers={"Content-Disposition": f"attachment; filename={version_name}"})
+
+
+@app.get("/api/jobs/list/active")
+async def list_active_jobs():
+    return runner_manager.get_active_jobs()

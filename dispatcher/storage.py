@@ -14,57 +14,54 @@ from dispatcher.types import RDSCoreVersion, TestRecord
 from dispatcher.config import CONFIG
 import os
 
+# possible filename formats:
+# windows-0.2.0.240909-0.2.0.zip
+# linux-0.2.0.240909-0.2.0.zip
+# windows-0.2.0.250707.zip
+# linux-0.2.0.250707.zip
+# windows-0.2.0.250707-0620.zip
+# windows-0.2.0.250708-fix-some-bug.zip
+def parse_rdscore_version_from_filename(filename: str) -> Optional[RDSCoreVersion]:
+    """
+    Parses the RDSCore version from the given filename.
 
-def is_file_rdscore_zip(path: Path) -> bool:
-    if not path.is_file():
-        return False
-    if not path.name.endswith(".zip"):
-        return False
-    # linux and windows:
-    # windows: windows-0.2.0.240909-0.2.0.zip
-    # linux: linux-0.2.0.240909-0.2.0.zip
-    if not path.name.startswith("windows") and not path.name.startswith("linux"):
-        return False
-    segments = path.name.split("-")
-    if len(segments) != 3:
-        return False
-    version_full = segments[1]
-    version_segments = version_full.split(".")
-    if len(version_segments) != 4:
-        return False
-    # version segments should start with 0 1 9 or 0 2 0
-    if version_segments[:3] not in [["0", "1", "9"], ["0", "2", "0"]]:
-        logging.info(
-            f"version_segments[0:2] not in [[\"0\", \"1\", \"9\"], [\"0\", \"2\", \"0\"]]: {version_segments[0:2]}")
-        return False
-    # TODO check file content
-    return True
+    Args:
+        filename (str): The filename to parse.
 
-
-def parse_rdscore_version_from_filename(filename: str) -> RDSCoreVersion | None:
+    Returns:
+        Optional[RDSCoreVersion]: Parsed RDSCoreVersion object or None if parsing fails.
+    """
     segments = filename.split("-")
-    if len(segments) != 3:
+    if len(segments) < 2:  # Ensure at least OS and version are present
         return None
+
     os = segments[0]
     version = segments[1]
     version_segments = version.split(".")
-    if len(version_segments) != 4:
+    if len(version_segments) < 3:  # Ensure major, minor, and patch are present
         return None
-    version_prefix = version_segments[0] + "." + \
-        version_segments[1] + "." + version_segments[2]
-    # date is the upload date, we can ignore it here
-    return RDSCoreVersion(version_prefix=version_prefix, date = "", os=os, md5="", name=filename.replace(".zip", ""))
+
+    version_prefix = ".".join(version_segments[:3])  # Combine major, minor, and patch
+    name = filename.replace(".zip", "")  # Remove the .zip extension
+
+    return RDSCoreVersion(
+        version_prefix=version_prefix,
+        date="",  # Date can be added later if needed
+        os=os,
+        md5="",  # MD5 can be calculated later
+        name=name,
+    )
 
 
 def parse_rdscore_version(path: Path) -> RDSCoreVersion | None:
     logging.info(f"parse_rdscore_version: {path}")
-    if not is_file_rdscore_zip(path):
-        logging.info("not a rdscore zip file")
+    if not path.exists():
+        logging.error(f"file {path} does not exist")
         return None
     # calculate md5 of the file
     md5 = hashlib.md5(path.read_bytes()).hexdigest()
     version = parse_rdscore_version_from_filename(path.name)
-    logging.info(f"parse_rdscore_version: {version}")
+    logging.info(f"parse_rdscore_version_from_filename: {version}")
     if version is None:
         return None
     version.md5 = md5
@@ -75,7 +72,7 @@ def parse_rdscore_version(path: Path) -> RDSCoreVersion | None:
         return None
     # convert to iso8601 date
     version.date = datetime.datetime.fromtimestamp(path.stat().st_mtime).isoformat()
-    
+    logging.info(f"parsed version: {version}")
     return version
 
 
@@ -87,19 +84,26 @@ class DispatcherStorage:
         self._load_rdscore_versions()
 
     def _load_rdscore_versions(self):
+        self.rdscore_versions.clear()
+        logging.info(f"load rdscore versions from {CONFIG.rdscore_versions_path}")
+        if not Path(CONFIG.rdscore_versions_path).exists():
+            logging.info(f"rdscore versions path {CONFIG.rdscore_versions_path} does not exist")
+            return
+        if not Path(CONFIG.rdscore_versions_path).is_dir():
+            logging.error(f"rdscore versions path {CONFIG.rdscore_versions_path} is not a directory")
+            return
         # 从文件夹中扫描rdscore版本
-        self.rdscore_versions = [
-            parse_rdscore_version(path)
-            for path in Path(CONFIG.rdscore_versions_path).iterdir()
-        ]
+        for path in Path(CONFIG.rdscore_versions_path).iterdir():
+            version = parse_rdscore_version(path)
+            if version is not None:
+                self.rdscore_versions.append(version)
+            else:
+                logging.warning(f"file {path} is not a valid rdscore zip file")
 
     def add_rdscore_version(self, version: str):
         self.rdscore_versions.append(version)
 
     def add_rdscore_zip(self, zip_file: bytes, filename: str, expected_md5: str):
-        version = parse_rdscore_version_from_filename(filename)
-        if version is None:
-            return
         # 检查md5
         md5 = hashlib.md5(zip_file).hexdigest()
         logging.info(f"md5: {md5}, expected_md5: {expected_md5}")
@@ -112,8 +116,8 @@ class DispatcherStorage:
         path.write_bytes(zip_file)
         logging.info(f"save rdscore zip to {path} done")
         # 更新rdscore_versions
-        self.rdscore_versions.append(version)
-        logging.info(f"add rdscore version {version} done")
+        self._load_rdscore_versions()
+        logging.info(f"add rdscore version {filename} done")
 
     def add_test_record(self, test_record: TestRecord):
         self.test_records.append(test_record)
@@ -143,3 +147,9 @@ class DispatcherStorage:
         if not path.exists():
             return None
         return path.read_bytes(), version.md5
+    
+    def get_version_info(self, version_str: str) -> Optional[RDSCoreVersion]:
+        for version in self.rdscore_versions:
+            if version.name == version_str:
+                return version
+        return None

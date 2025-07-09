@@ -52,19 +52,20 @@ class TestRunner:
 
     def current_job(self):
         return self._current_job
-    
+
     def run(self):
         print("Started TestRunner")
-        #self.load_unfinished_jobs()
         while True:
-            if self._current_job is None:
-                print("No current job, waiting for new job")
+            time.sleep(1)
+
             if self._stop_current_job:
                 print("Stopping current job")
                 if self._current_job:
                     self._current_job.status = TestJobStatus.failed
                     self._current_job.error = "Stopped by user"
                 self._stop_current_job = False
+                continue
+            if self._current_job is None:
                 continue
             self._running = True
 
@@ -175,14 +176,13 @@ class TestRunner:
     def submit_job(self, job_input: CreateTestJobRequest):
         if not self.accept_test_job(job_input):
             return CreateTestJobResponse(created=False)
-        job = TestJob(**job_input.dict())
+        job = TestJob(**job_input.model_dump())
         job.status = TestJobStatus.pending
         job.testcase_folder = CI_CONFIG.testcase_folder
         job.report_path = CI_CONFIG.output_path
         job.id = str(uuid.uuid1())
         job.start_time = datetime.now().isoformat()
         job.rdscore_file_url = job_input.rdscore_file_url
-        self._test_job_q.put(job)
         return CreateTestJobResponse(created=True, job=job)
 
     def running(self):

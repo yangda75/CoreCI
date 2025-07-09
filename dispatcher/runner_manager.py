@@ -44,6 +44,36 @@ class RunnerManager:
     def submit_job(self, job: CreateTestJobRequest):
         if job.id is None:
             job.id = str(uuid.uuid1())
+        if job.os is None:
+            # determine os by rdscore_version
+            if job.rdscore_version is not None:
+                version_info = self.storage.get_version_info(job.rdscore_version)
+                if version_info is not None:
+                    job.os = version_info.os
+                else:
+                    logging.error(f"Version {job.rdscore_version} not found in storage.")
+                    return
+            else:
+                logging.error("Job OS is not specified and rdscore_version is not provided.")
+                return
+        if job.os not in ["windows", "linux"]:
+            logging.error(f"Unsupported OS: {job.os}. Only 'windows' and 'linux' are supported.")
+            return
+        if job.rdscore_version is None:
+            logging.error("Job rdscore_version is not specified.")
+            return
+        # check if job already exists
+        for existing_job in self.jobs_to_dispatch:
+            if existing_job.id == job.id:
+                logging.warning(f"Job with ID {job.id} already exists in the dispatch queue.")
+                return
+        # check if job is already running
+        for running_job in self.jobs_running:
+            if running_job.id == job.id:
+                logging.warning(f"Job with ID {job.id} is already running.")
+                return
+        # add job to jobs_to_dispatch
+        logging.info(f"Submitting job {job.id} for OS {job.os} with rdscore version {job.rdscore_version}.")
         self.jobs_to_dispatch.append(job)
         
     def _load_runner_infos(self):
@@ -120,3 +150,21 @@ class RunnerManager:
         TODO: 心跳机制
         """
         pass
+
+    def get_jobs_to_dispatch(self) -> List[CreateTestJobRequest]:
+        """
+        获取待分发的任务
+        """
+        return self.jobs_to_dispatch
+    
+    def get_running_jobs(self) -> List[CreateTestJobRequest]:
+        """
+        获取正在运行的任务
+        """
+        return self.jobs_running
+    
+    def get_active_jobs(self) -> List[CreateTestJobRequest]:
+        """
+        获取所有活跃的任务（待分发和正在运行的任务）
+        """
+        return self.jobs_to_dispatch + self.jobs_running
