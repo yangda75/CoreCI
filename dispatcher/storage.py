@@ -5,6 +5,7 @@
 """
 
 from ast import Tuple
+import datetime
 import hashlib
 import logging
 from pathlib import Path
@@ -51,7 +52,8 @@ def parse_rdscore_version_from_filename(filename: str) -> RDSCoreVersion | None:
         return None
     version_prefix = version_segments[0] + "." + \
         version_segments[1] + "." + version_segments[2]
-    return RDSCoreVersion(version_prefix=version_prefix, version=version, os=os, md5="", full=filename.replace(".zip", ""))
+    # date is the upload date, we can ignore it here
+    return RDSCoreVersion(version_prefix=version_prefix, date = "", os=os, md5="", name=filename.replace(".zip", ""))
 
 
 def parse_rdscore_version(path: Path) -> RDSCoreVersion | None:
@@ -66,6 +68,14 @@ def parse_rdscore_version(path: Path) -> RDSCoreVersion | None:
     if version is None:
         return None
     version.md5 = md5
+    # version.date is iso8601 date, we can use the file modification time
+    # as the date
+    if not path.stat().st_mtime:
+        logging.error(f"file {path} has no modification time")
+        return None
+    # convert to iso8601 date
+    version.date = datetime.datetime.fromtimestamp(path.stat().st_mtime).isoformat()
+    
     return version
 
 
