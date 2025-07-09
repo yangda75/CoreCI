@@ -4,7 +4,7 @@ from datetime import datetime
 
 class CreateTestJobRequest(BaseModel):
     testcase_mark: str = 'm0'
-    rdscore_version: str | None = ""
+    rdscore_file_url: str = ""
     
 
 class TestJobStatus(str, Enum):
@@ -25,6 +25,8 @@ class TestJob(BaseModel):
     error: str | None = None
     log_path: str | None = None
     report_path: str | None = None
+    rdscore_file_path_abs : str | None = None # This is the absolute path to the rdscore file
+    rdscore_file_url: str | None = None # This is the URL to download the rdscore file, not the local path
 
 class CreateTestJobResponse(BaseModel):
     created: bool = False

@@ -18,12 +18,11 @@ class CreateTestJobResponse(BaseModel):
 
 
 class RDSCoreVersion(BaseModel):
-    version_prefix: str  # 0.1.9
-    version: str  # 0.1.9.240909
     os: str  # windows or linux
     md5: str
-    full: str  # windows-0.1.9.240909-0.1.9.zip
-
+    name: str  # windows-0.1.9.240909-0.1.9.zip
+    date: str # iso8601 date, upload date
+    version_prefix: str  # 0.1.9
 
 class TestRecord(BaseModel):
     job_id: str
