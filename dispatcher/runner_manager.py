@@ -2,7 +2,6 @@ import logging
 from pathlib import Path
 import sqlite3
 import time
-from typing import List
 import requests
 
 import uuid
@@ -19,7 +18,7 @@ def send_version(zip_file: bytes, expected_md5: str, runner: RunnerHandle):
 def accept_job(job: CreateTestJobRequest, runner: RunnerHandle):
     res = requests.post(f"{runner.baseurl}/test/job/accept", json=job.dict())
     logging.info(f"try to accept job {runner.id} {res.text}")
-    return res.json()["accepted"] == True
+    return res.json()["accepted"]
 
 
 def send_job(job: CreateTestJobRequest, runner: RunnerHandle):
@@ -151,19 +150,19 @@ class RunnerManager:
         """
         pass
 
-    def get_jobs_to_dispatch(self) -> List[CreateTestJobRequest]:
+    def get_jobs_to_dispatch(self) -> list[CreateTestJobRequest]:
         """
         获取待分发的任务
         """
         return self.jobs_to_dispatch
     
-    def get_running_jobs(self) -> List[CreateTestJobRequest]:
+    def get_running_jobs(self) -> list[CreateTestJobRequest]:
         """
         获取正在运行的任务
         """
         return self.jobs_running
     
-    def get_active_jobs(self) -> List[CreateTestJobRequest]:
+    def get_active_jobs(self) -> list[CreateTestJobRequest]:
         """
         获取所有活跃的任务（待分发和正在运行的任务）
         """

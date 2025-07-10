@@ -1,4 +1,3 @@
-from typing import List
 
 from pydantic import BaseModel
 
@@ -33,13 +32,13 @@ class TestRecord(BaseModel):
     status: str
     error: str | None = None
     report_url: str | None = None
-    tested_cases: List[str] = []
+    tested_cases: list[str] = []
     start_time: str
 
 
 class RdscoreVersionTestRecord(BaseModel):
     version: str
-    test_records: List[TestRecord]
+    test_records: list[TestRecord]
 
 
 class RunnerHandle(BaseModel):

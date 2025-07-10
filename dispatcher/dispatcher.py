@@ -6,18 +6,14 @@
 """
 
 from contextlib import asynccontextmanager
-import datetime
 import json
 import logging
 import threading
-from typing import Optional
-import uuid
 
 import aiofiles as aiofiles
 from fastapi import FastAPI, UploadFile, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import Json
 
 from dispatcher.runner_manager import RunnerManager, RunnerHandle
 from dispatcher.storage import DispatcherStorage
@@ -29,8 +25,8 @@ logging.getLogger("uvicorn.access")
 FORMAT = "%(asctime)s %(message)s"
 logging.basicConfig(format=FORMAT, level=logging.INFO)
 
-runner_manager: Optional[RunnerManager] = None
-storage: Optional[DispatcherStorage] = None
+runner_manager: RunnerManager | None = None
+storage: DispatcherStorage | None = None
 
 templates = Jinja2Templates(directory=str(Path(Path(__file__).resolve().parent, "templates")))
 
@@ -74,12 +70,6 @@ async def add_runner(runner: RunnerHandle):
 @app.post("/api/jobs/submit/")
 async def submit_test_job(job: CreateTestJobRequest):
     runner_manager.submit_job(job)
-
-
-@app.post("/api/runners/register/")
-async def add_runner(runner_handle: RunnerHandle):
-    runner_manager.register(runner_handle)
-
 
 @app.post("/api/versions/upload/{expected_md5}")
 async def upload_build(file: UploadFile, expected_md5: str):

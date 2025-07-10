@@ -2,7 +2,6 @@ from contextlib import asynccontextmanager
 import datetime
 import os
 import threading
-from typing import Optional
 
 from fastapi import FastAPI, Request, UploadFile
 from fastapi.staticfiles import StaticFiles
@@ -15,7 +14,7 @@ from test_runner.test_runner_impl import TestRunner, create_sample_test_job
 from pathlib import Path
 
 templates = {}
-runner: Optional[TestRunner] = None
+runner: TestRunner | None = None
 
 
 @asynccontextmanager

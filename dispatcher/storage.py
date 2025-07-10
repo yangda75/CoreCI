@@ -4,12 +4,10 @@
 2. 对应的测试记录
 """
 
-from ast import Tuple
 import datetime
 import hashlib
 import logging
 from pathlib import Path
-from typing import List, Optional
 from dispatcher.types import RDSCoreVersion, TestRecord
 from dispatcher.config import CONFIG
 import os
@@ -21,7 +19,7 @@ import os
 # linux-0.2.0.250707.zip
 # windows-0.2.0.250707-0620.zip
 # windows-0.2.0.250708-fix-some-bug.zip
-def parse_rdscore_version_from_filename(filename: str) -> Optional[RDSCoreVersion]:
+def parse_rdscore_version_from_filename(filename: str) -> RDSCoreVersion | None:
     """
     Parses the RDSCore version from the given filename.
 
@@ -78,8 +76,8 @@ def parse_rdscore_version(path: Path) -> RDSCoreVersion | None:
 
 class DispatcherStorage:
     def __init__(self):
-        self.rdscore_versions: List[RDSCoreVersion] = []
-        self.test_records: List[TestRecord] = []
+        self.rdscore_versions: list[RDSCoreVersion] = []
+        self.test_records: list[TestRecord] = []
         os.makedirs(CONFIG.rdscore_versions_path, exist_ok=True)
         self._load_rdscore_versions()
 
@@ -122,14 +120,14 @@ class DispatcherStorage:
     def add_test_record(self, test_record: TestRecord):
         self.test_records.append(test_record)
 
-    def get_test_records(self, rdscore_version: str) -> List[TestRecord]:
+    def get_test_records(self, rdscore_version: str) -> list[TestRecord]:
         return [
             record
             for record in self.test_records
             if record.rdscore_version == rdscore_version
         ]
 
-    def list_versions(self) -> List[RDSCoreVersion]:
+    def list_versions(self) -> list[RDSCoreVersion]:
         logging.info(f"list_versions: {self.rdscore_versions}")
         return self.rdscore_versions
 
@@ -148,7 +146,7 @@ class DispatcherStorage:
             return None
         return path.read_bytes(), version.md5
     
-    def get_version_info(self, version_str: str) -> Optional[RDSCoreVersion]:
+    def get_version_info(self, version_str: str) -> RDSCoreVersion | None:
         for version in self.rdscore_versions:
             if version.name == version_str:
                 return version
