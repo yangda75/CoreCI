@@ -104,7 +104,7 @@ def wait_until_core_started(timeout_sec=10) -> bool:
 
 def linux_start_core(path):
     """Start the core service on Linux."""
-    pass
+    os.system(f"cd {path} && sudo ./rbk &")
 
 
 def start_core(path):

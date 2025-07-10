@@ -23,8 +23,9 @@ class RDSCoreVersion(BaseModel):
     date: str # iso8601 date, upload date
     version_prefix: str  # 0.1.9
 
-class TestRecord(BaseModel):
-    job_id: str
+# status: the status of the job (waiting, running, finished, failed)
+class TestJob(BaseModel):
+    id: str
     runner_id: str
     os: str
     testcase_mark: str
@@ -38,7 +39,7 @@ class TestRecord(BaseModel):
 
 class RdscoreVersionTestRecord(BaseModel):
     version: str
-    test_records: list[TestRecord]
+    test_records: list[TestJob]
 
 
 class RunnerHandle(BaseModel):

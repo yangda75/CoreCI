@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from dispatcher.runner_manager import RunnerManager, RunnerHandle
-from dispatcher.storage import DispatcherStorage
+from dispatcher.storage import VersionStorage, TestJobStorage
 from dispatcher.types import CreateTestJobRequest
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
@@ -26,7 +26,8 @@ FORMAT = "%(asctime)s %(message)s"
 logging.basicConfig(format=FORMAT, level=logging.INFO)
 
 runner_manager: RunnerManager | None = None
-storage: DispatcherStorage | None = None
+version_storage: VersionStorage | None = None
+job_storage: TestJobStorage | None = None
 
 templates = Jinja2Templates(directory=str(Path(Path(__file__).resolve().parent, "templates")))
 
@@ -34,10 +35,11 @@ templates = Jinja2Templates(directory=str(Path(Path(__file__).resolve().parent, 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global runner_manager
-    global storage
-    storage = DispatcherStorage()
-    
-    runner_manager = RunnerManager(storage)
+    global version_storage
+    version_storage = VersionStorage()
+    global job_storage
+    job_storage = TestJobStorage()
+    runner_manager = RunnerManager(version_storage, job_storage)
     threading.Thread(group=None, target=runner_manager.run, daemon=True).start()
     app.mount("/",
               StaticFiles(directory=str(Path(__file__).resolve().parent / "dist")),
@@ -73,15 +75,15 @@ async def submit_test_job(job: CreateTestJobRequest):
 
 @app.post("/api/versions/upload/{expected_md5}")
 async def upload_build(file: UploadFile, expected_md5: str):
-    storage.add_rdscore_zip(file.file.read(), file.filename, expected_md5)
+    version_storage.add_rdscore_zip(file.file.read(), file.filename, expected_md5)
 
 @app.get("/api/versions/list/")
 async def list_versions():
-    return storage.list_versions()
+    return version_storage.list_versions()
 
 @app.get("/api/versions/download/{version_name}")
 async def download_version(version_name: str):
-    version_path = Path(storage.rdscore_versions_path) / version_name
+    version_path = Path(version_storage.rdscore_versions_path) / version_name
     if not version_path.exists():
         return {"error": "version not found"}
     async with aiofiles.open(version_path, mode='rb') as f:

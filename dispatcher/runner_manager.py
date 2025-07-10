@@ -8,7 +8,8 @@ import uuid
 import os
 
 from dispatcher.config import CONFIG
-from dispatcher.types import CreateTestJobRequest, RunnerHandle
+from dispatcher.types import CreateTestJobRequest, RunnerHandle, TestJob
+from dispatcher.storage import VersionStorage, TestJobStorage
 
 def send_version(zip_file: bytes, expected_md5: str, runner: RunnerHandle):
     res = requests.post(f"{runner.baseurl}/test/storage/versions/upload/{expected_md5}", files={"file": zip_file})
@@ -28,53 +29,58 @@ def send_job(job: CreateTestJobRequest, runner: RunnerHandle):
     return res.json()
 
 class RunnerManager:
-    def __init__(self, storage):
+    def __init__(self, version_storage: VersionStorage, job_storage: TestJobStorage):
         self.runners: list[RunnerHandle] = []
-        self.jobs_to_dispatch: list[CreateTestJobRequest] = []
-        self.jobs_running: list[CreateTestJobRequest] = []
         self._load_runner_infos()
-        self.storage = storage
-
+        self.version_storage = version_storage
+        self.job_storage = job_storage
+        
     def get_all_runners(self):
         if self.runners == []:
             return [RunnerHandle()]
         return self.runners
 
-    def submit_job(self, job: CreateTestJobRequest):
-        if job.id is None:
-            job.id = str(uuid.uuid1())
-        if job.os is None:
+    def submit_job(self, job_req: CreateTestJobRequest):
+        if job_req.id is None:
+            job_req.id = str(uuid.uuid1())
+        if job_req.os is None:
             # determine os by rdscore_version
-            if job.rdscore_version is not None:
-                version_info = self.storage.get_version_info(job.rdscore_version)
+            if job_req.rdscore_version is not None:
+                version_info = self.version_storage.get_version_info(job_req.rdscore_version)
                 if version_info is not None:
-                    job.os = version_info.os
+                    job_req.os = version_info.os
                 else:
-                    logging.error(f"Version {job.rdscore_version} not found in storage.")
+                    logging.error(f"Version {job_req.rdscore_version} not found in storage.")
                     return
             else:
                 logging.error("Job OS is not specified and rdscore_version is not provided.")
                 return
-        if job.os not in ["windows", "linux"]:
-            logging.error(f"Unsupported OS: {job.os}. Only 'windows' and 'linux' are supported.")
+        if job_req.os not in ["windows", "linux"]:
+            logging.error(f"Unsupported OS: {job_req.os}. Only 'windows' and 'linux' are supported.")
             return
-        if job.rdscore_version is None:
+        if job_req.rdscore_version is None:
             logging.error("Job rdscore_version is not specified.")
             return
         # check if job already exists
-        for existing_job in self.jobs_to_dispatch:
-            if existing_job.id == job.id:
-                logging.warning(f"Job with ID {job.id} already exists in the dispatch queue.")
-                return
-        # check if job is already running
-        for running_job in self.jobs_running:
-            if running_job.id == job.id:
-                logging.warning(f"Job with ID {job.id} is already running.")
-                return
+        existing_job = self.job_storage.get_test_job_by_id(job_req.id)
+        if existing_job is not None:
+            logging.warning(f"Job with ID {job_req.id} already exists. Updating job status to 'waiting'.")
+            existing_job.status = "waiting"
+            self.job_storage.update_test_job(existing_job)
+            return
         # add job to jobs_to_dispatch
-        logging.info(f"Submitting job {job.id} for OS {job.os} with rdscore version {job.rdscore_version}.")
-        self.jobs_to_dispatch.append(job)
-        
+        job = TestJob(
+            id=job_req.id,
+            runner_id="",
+            os=job_req.os,
+            testcase_mark=job_req.testcase_mark,
+            rdscore_version=job_req.rdscore_version,
+            status="waiting",
+            start_time=time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+        )
+        self.job_storage.add_test_job(job)
+        logging.info(f"Submitting job {job_req.id} for OS {job_req.os} with rdscore version {job_req.rdscore_version}.")
+                
     def _load_runner_infos(self):
         # 从文件夹中扫描runner信息
         # create file if not exists
@@ -112,15 +118,16 @@ class RunnerManager:
                 break
 
     def process_jobs(self):
-        if not self.jobs_to_dispatch:
+        jobs_waiting = self.job_storage.list_test_jobs_by_status("waiting")
+        if not jobs_waiting:
             return False
-        for job in self.jobs_to_dispatch[:]:
+        for job in jobs_waiting:
             if self.match_and_dispatch_job(job):
                 # remove job from jobs_to_dispatch
                 return True
         return False
 
-    def match_and_dispatch_job(self, job: CreateTestJobRequest):
+    def match_and_dispatch_job(self, job: TestJob):
         for runner in self.runners[:]:
             # match job and runner
             if runner.os != job.os:
@@ -128,9 +135,12 @@ class RunnerManager:
             if runner.status != "idle":
                 continue
             # send version to runner
-            zip_file_and_md5 = self.storage.fetch_file_and_md5_of_version(job.rdscore_version, job.os)
+            zip_file_and_md5 = self.version_storage.fetch_file_and_md5_of_version(job.rdscore_version, job.os)
             if zip_file_and_md5 is None:
-                self.jobs_to_dispatch.remove(job)
+                job.error = f"Version {job.rdscore_version} not found for OS {job.os}."
+                job.status = "failed"
+                self.job_storage.update_test_job(job)
+                logging.error(f"Failed to find version {job.rdscore_version} for OS {job.os}.")
                 continue
             zip_file, md5 = zip_file_and_md5
             send_version(zip_file, md5, runner)
@@ -150,20 +160,20 @@ class RunnerManager:
         """
         pass
 
-    def get_jobs_to_dispatch(self) -> list[CreateTestJobRequest]:
+    def get_jobs_to_dispatch(self) -> list[TestJob]:
         """
         获取待分发的任务
         """
-        return self.jobs_to_dispatch
+        return self.job_storage.list_test_jobs_by_status("waiting")
     
-    def get_running_jobs(self) -> list[CreateTestJobRequest]:
+    def get_running_jobs(self) -> list[TestJob]:
         """
         获取正在运行的任务
         """
-        return self.jobs_running
+        return self.job_storage.list_test_jobs_by_status("running")
     
-    def get_active_jobs(self) -> list[CreateTestJobRequest]:
+    def get_active_jobs(self) -> list[TestJob]:
         """
         获取所有活跃的任务（待分发和正在运行的任务）
         """
-        return self.jobs_to_dispatch + self.jobs_running
+        return self.get_jobs_to_dispatch() + self.get_running_jobs()

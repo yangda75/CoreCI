@@ -22,8 +22,6 @@ async def lifespan(app: FastAPI):
     # setup
     if not os.path.exists(CI_CONFIG.output_path):
         os.makedirs(CI_CONFIG.output_path)
-    if not os.path.exists(CI_CONFIG.jobs_dir):
-        os.makedirs(CI_CONFIG.jobs_dir)
     global templates
     templates = Jinja2Templates(
         directory=str(Path(Path(__file__).resolve().parent, "templates"))

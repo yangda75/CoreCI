@@ -8,7 +8,7 @@ import datetime
 import hashlib
 import logging
 from pathlib import Path
-from dispatcher.types import RDSCoreVersion, TestRecord
+from dispatcher.types import RDSCoreVersion, TestJob
 from dispatcher.config import CONFIG
 import os
 
@@ -74,10 +74,10 @@ def parse_rdscore_version(path: Path) -> RDSCoreVersion | None:
     return version
 
 
-class DispatcherStorage:
+class VersionStorage:
     def __init__(self):
         self.rdscore_versions: list[RDSCoreVersion] = []
-        self.test_records: list[TestRecord] = []
+        self.test_records: list[TestJob] = []
         os.makedirs(CONFIG.rdscore_versions_path, exist_ok=True)
         self._load_rdscore_versions()
 
@@ -117,10 +117,10 @@ class DispatcherStorage:
         self._load_rdscore_versions()
         logging.info(f"add rdscore version {filename} done")
 
-    def add_test_record(self, test_record: TestRecord):
+    def add_test_record(self, test_record: TestJob):
         self.test_records.append(test_record)
 
-    def get_test_records(self, rdscore_version: str) -> list[TestRecord]:
+    def get_test_records(self, rdscore_version: str) -> list[TestJob]:
         return [
             record
             for record in self.test_records
@@ -150,4 +150,73 @@ class DispatcherStorage:
         for version in self.rdscore_versions:
             if version.name == version_str:
                 return version
+        return None
+    
+class TestJobStorage:
+    def __init__(self):
+        self.test_jobs: list[TestJob] = []
+        os.makedirs(CONFIG.jobs_path, exist_ok=True)
+        self._load_test_jobs()
+
+    def _load_test_jobs(self):
+        self.test_jobs.clear()
+        logging.info(f"load test jobs from {CONFIG.jobs_path}")
+        if not Path(CONFIG.jobs_path).exists():
+            logging.info(f"test jobs path {CONFIG.jobs_path} does not exist")
+            return
+        if not Path(CONFIG.jobs_path).is_dir():
+            logging.error(f"test jobs path {CONFIG.jobs_path} is not a directory")
+            return
+        # 从文件夹中扫描测试记录
+        for path in Path(CONFIG.jobs_path).iterdir():
+            if path.suffix == ".json":
+                try:
+                    with open(path) as f:
+                        record = TestJob.model_validate_json(f.read())
+                        self.test_jobs.append(record)
+                except Exception as e:
+                    logging.error(f"failed to load test job {path}: {e}")
+    
+    def add_test_job(self, test_job: TestJob):
+        self.test_jobs.append(test_job)
+        # save to file
+        path = Path(CONFIG.jobs_path) / f"{test_job.id}.json"
+        with open(path, "w") as f:
+            f.write(test_job.model_dump_json(indent=4))
+        logging.info(f"saved test job {test_job.id} to {path}")
+
+    def get_test_job(self, id: str) -> TestJob | None:
+        for job in self.test_jobs:
+            if job.id == id:
+                return job
+        return None
+    
+    def list_test_jobs(self) -> list[TestJob]:
+        return self.test_jobs
+    
+    def list_test_jobs_by_runner(self, runner_id: str) -> list[TestJob]:
+        return [job for job in self.test_jobs if job.runner_id == runner_id]
+    
+    def list_test_jobs_by_os(self, os: str) -> list[TestJob]:
+        return [job for job in self.test_jobs if job.os == os]
+    
+    def list_test_jobs_by_status(self, status: str) -> list[TestJob]:
+        return [job for job in self.test_jobs if job.status == status]
+    
+    def update_test_job(self, test_job: TestJob):
+        for i, job in enumerate(self.test_jobs):
+            if job.id == test_job.id:
+                self.test_jobs[i] = test_job
+                # save to file
+                path = Path(CONFIG.jobs_path) / f"{test_job.id}.json"
+                with open(path, "w") as f:
+                    f.write(test_job.model_dump_json(indent=4))
+                logging.info(f"updated test job {test_job.id} to {path}")
+                return
+        logging.error(f"test job {test_job.id} not found")
+
+    def get_test_job_by_id(self, id: str) -> TestJob | None:
+        for job in self.test_jobs:
+            if job.id == id:
+                return job
         return None
