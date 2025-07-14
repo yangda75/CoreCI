@@ -69,6 +69,11 @@ async def get_all_runners():
 async def add_runner(runner: RunnerHandle):
     runner_manager.add_runner(runner)
 
+
+@app.post("/api/runners/remove/{runner_id}")
+async def remove_runner(runner_id: str):
+    runner_manager.remove_runner(runner_id)
+
 @app.post("/api/jobs/submit/")
 async def submit_test_job(job: CreateTestJobRequest):
     runner_manager.submit_job(job)

@@ -31,3 +31,14 @@
 4. Dispatcher发送版本给TestRunner
 5. Dispatcher发送任务给TestRunner
 6. TestRunner执行任务
+
+
+# 设计文档
+
+## TestRunner 和 Dispatcher 的交互
+
+1. 通过 `/api/runners/add` 添加
+2. Dispatcher <-> TestRunner 心跳
+3. Dispatcher -> TestRunner 发测试指令给Runner
+4. Dispatcher <- TestRunner 下载文件
+5. Dispatcher <- TestRunner 推送任务进度

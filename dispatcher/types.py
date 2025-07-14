@@ -45,5 +45,5 @@ class RdscoreVersionTestRecord(BaseModel):
 class RunnerHandle(BaseModel):
     id: str | None = "DefaultRunnerId"
     os: str | None = "windows"
-    status: str | None = "idle"
+    status: str | None = "idle" # idle, running, error, ping-failed
     baseurl: str | None = "http://127.0.0.1:10898"

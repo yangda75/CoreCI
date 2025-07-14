@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 
 class CiConfig(BaseModel):
+    os: str
     builds_dir: str 
     testcase_folder: str
     output_path: str
@@ -12,6 +13,7 @@ class CiConfig(BaseModel):
 
 if os.name == "nt":  # Windows
     CI_CONFIG = CiConfig(
+        os="windows",
         builds_dir="D:/test/builds",
         testcase_folder="C:/projects/AutoTest",
         output_path="D:/test/runs", 
@@ -20,6 +22,7 @@ if os.name == "nt":  # Windows
     )
 else:  # Linux
     CI_CONFIG = CiConfig(
+        os="linux",
         builds_dir="/tmp/coreci-testrunner/builds",
         testcase_folder="/tmp/coreci-testrunner/testcases",
         output_path="/tmp/coreci-testrunner/runs", 

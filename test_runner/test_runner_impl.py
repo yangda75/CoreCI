@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 
 from test_runner.config import CI_CONFIG
-from test_runner.test_job import AcceptTestJobResponse, CreateTestJobResponse, TestJob, CreateTestJobRequest, TestJobStatus
+from test_runner.test_job import AcceptTestJobResponse, CreateTestJobResponse, RunnerTestJob, TestJobStatus, TestJob
 from test_runner.utils import (
     is_core_running,
     kill_core,
@@ -25,12 +25,10 @@ from test_runner.utils import (
     wait_until_core_stopped,
 )
 
-def create_sample_test_job() -> TestJob:
-    j = TestJob()
+def create_sample_test_job() -> RunnerTestJob:
+    j = RunnerTestJob()
     j.id = str(uuid.uuid1())
     j.start_time = datetime.now().isoformat()
-    j.testcase_folder = CI_CONFIG.testcase_folder
-    j.report_path = CI_CONFIG.output_path
     return j
 
 
@@ -39,7 +37,7 @@ def identify_os():
 
 class TestRunner:
     _stop_current_job = False
-    _current_job: TestJob | None = None
+    _current_job: RunnerTestJob | None = None
     _running = False
     _os: str
 
@@ -69,13 +67,13 @@ class TestRunner:
                 continue
             self._running = True
 
-    def accept_test_job(self, job: CreateTestJobRequest)->AcceptTestJobResponse:
+    def accept_test_job(self, job: RunnerTestJob)->AcceptTestJobResponse:
         # 如果正在执行，就不能接受新任务
         if self._running:
             return AcceptTestJobResponse(accepted=False, error="TestRunner is currently running a job")
         return AcceptTestJobResponse(accepted=True)
 
-    def run_test_job(self, job: TestJob):
+    def run_test_job(self, job: RunnerTestJob):
         if job.testcase_folder is None:
             job.status = TestJobStatus.failed
             job.error = "Testcase folder cannot be None"
@@ -105,10 +103,23 @@ class TestRunner:
 
         job.status = TestJobStatus.finished
 
+    def run_test_job2(self, job:RunnerTestJob):
+        """
+        1. download rdscore
+        2. fetch test cases
+        3. start core
+        4. run test cases
+        5. merge reports
+        6. stop core
+        7. update job status
+        """
+        pass
+
+
     def get_info(self):
         return {"os": CI_CONFIG.os, "current_job": self._current_job}
 
-    def _stop_core_and_start(self, job: TestJob) -> bool:
+    def _stop_core_and_start(self, job: RunnerTestJob) -> bool:
         if is_core_running():
             kill_core()
         if not wait_until_core_stopped(timeout_sec=30):
@@ -123,7 +134,7 @@ class TestRunner:
             return False
         return True
 
-    def _process_entry(self, entry, job: TestJob, run_output_path: str) -> bool:
+    def _process_entry(self, entry, job: RunnerTestJob, run_output_path: str) -> bool:
         if entry.name in job.finished_cases:
             print(f"skip {entry.name} because it is already finished")
             return True
@@ -173,10 +184,10 @@ class TestRunner:
         )
         return True
   
-    def submit_job(self, job_input: CreateTestJobRequest):
+    def submit_job(self, job_input: TestJob):
         if not self.accept_test_job(job_input):
             return CreateTestJobResponse(created=False)
-        job = TestJob(**job_input.model_dump())
+        job = RunnerTestJob(**job_input.model_dump())
         job.status = TestJobStatus.pending
         job.testcase_folder = CI_CONFIG.testcase_folder
         job.report_path = CI_CONFIG.output_path
